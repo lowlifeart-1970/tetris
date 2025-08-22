@@ -33,6 +33,8 @@
         html, body {
             -ms-overflow-style: none;
             scrollbar-width: none;
+            overflow: hidden;
+            height: 100%;
         }
         /* AI Message Styling */
         #inGameMessage {
@@ -64,13 +66,12 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white flex flex-col h-screen max-h-screen p-2 overflow-hidden">
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen p-2">
 
-    <!-- Main Content Area -->
-    <div class="w-full max-w-4xl mx-auto flex flex-col lg:flex-row items-center justify-center gap-4 flex-grow min-h-0">
+    <div id="game-container" class="w-full max-w-4xl mx-auto flex flex-col lg:flex-row items-center justify-center gap-4">
 
         <!-- Game Canvas and Controls -->
-        <div class="relative w-full max-w-sm mx-auto">
+        <div id="canvas-wrapper" class="relative w-full lg:w-auto">
             <canvas id="tetris" class="border-4 border-gray-700 bg-black rounded-lg shadow-lg"></canvas>
             
             <!-- In-Game AI Message -->
@@ -146,11 +147,10 @@
                 <button id="muteButton" class="game-btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-lg shadow-md w-full">MUTE MUSIC</button>
             </div>
         </div>
-
     </div>
     
     <!-- Mobile Controls -->
-    <div id="mobileControls" class="lg:hidden w-full max-w-sm mx-auto pt-2 flex-shrink-0">
+    <div id="mobileControls" class="lg:hidden w-full max-w-sm mx-auto pt-2">
         <div class="grid grid-cols-3 grid-rows-2 gap-3">
             <button id="left-btn" class="game-btn col-span-1 row-start-2 bg-gray-700 p-4 rounded-lg text-3xl shadow-md">←</button>
             <button id="down-btn" class="game-btn col-span-1 row-start-2 bg-gray-700 p-4 rounded-lg text-3xl shadow-md">↓</button>
@@ -182,6 +182,8 @@
         const closeHowToPlayButton = document.getElementById('closeHowToPlayButton');
         const finalScoreElement = document.getElementById('finalScore');
         const inGameMessage = document.getElementById('inGameMessage');
+        const mobileControls = document.getElementById('mobileControls');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
 
         // --- Game Constants ---
         const COLS = 10;
@@ -189,18 +191,41 @@
         const NEXT_BOX_SIZE = 4;
 
         // --- Responsive Canvas Sizing ---
-        function resizeCanvas() {
-            const container = canvas.parentElement;
-            const containerWidth = container.clientWidth;
-            const newBlockSize = Math.floor(containerWidth / COLS);
-            canvas.width = COLS * newBlockSize;
-            canvas.height = ROWS * newBlockSize;
-            context.scale(newBlockSize, newBlockSize);
+        function resizeGameArea() {
+            const isMobile = window.innerWidth < 1024;
+            const screenH = window.innerHeight;
+            const screenW = window.innerWidth;
+
+            // On mobile, account for the controls height
+            const controlsHeight = isMobile ? mobileControls.offsetHeight + 20 : 0;
+            const availableHeight = screenH - controlsHeight - 20; // 20 for padding
+            
+            // Determine the max width for the canvas (it's inside a flex container)
+            const availableWidth = canvasWrapper.parentElement.clientWidth;
+            const maxWidth = isMobile ? availableWidth : Math.min(availableWidth * 0.5, 448); // On desktop, give it half the space up to a max
+
+            // Calculate block size based on both height and width constraints
+            const blockSizeFromHeight = Math.floor(availableHeight / ROWS);
+            const blockSizeFromWidth = Math.floor(maxWidth / COLS);
+            const blockSize = Math.min(blockSizeFromHeight, blockSizeFromWidth);
+
+            canvas.width = COLS * blockSize;
+            canvas.height = ROWS * blockSize;
+            canvasWrapper.style.width = `${canvas.width}px`;
+            canvasWrapper.style.height = `${canvas.height}px`;
+
+            context.scale(blockSize, blockSize);
+
+            // Resize next piece canvas
             const nextBlockSize = Math.floor(nextCanvas.width / NEXT_BOX_SIZE);
             nextContext.scale(nextBlockSize, nextBlockSize);
+
+            if (grid) draw();
         }
-        window.addEventListener('resize', () => { resizeCanvas(); if(grid) draw(); });
-        resizeCanvas();
+
+        window.addEventListener('resize', resizeGameArea);
+        // Use a slight delay on load to ensure all elements have rendered
+        window.addEventListener('load', () => setTimeout(resizeGameArea, 100));
 
         // --- Tetrominoes and Colors ---
         const COLORS = ['#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'];
@@ -524,9 +549,31 @@
             context.setTransform(blockSize, 0, 0, blockSize, 0, 0);
             context.fillStyle = '#000';
             context.fillRect(0, 0, COLS, ROWS);
-            drawGrid();
+            
+            drawBackgroundGrid(); // Draw the grid lines
+
+            drawGrid(); // This function draws the placed blocks
             drawPiece(currentPiece, context);
             drawNextPiece();
+        }
+
+        function drawBackgroundGrid() {
+            context.strokeStyle = '#222'; // A dark grey color for the grid
+            context.lineWidth = 0.05;
+
+            for (let x = 0; x <= COLS; x++) {
+                context.beginPath();
+                context.moveTo(x, 0);
+                context.lineTo(x, ROWS);
+                context.stroke();
+            }
+
+            for (let y = 0; y <= ROWS; y++) {
+                context.beginPath();
+                context.moveTo(0, y);
+                context.lineTo(COLS, y);
+                context.stroke();
+            }
         }
         
         function drawGrid() {
